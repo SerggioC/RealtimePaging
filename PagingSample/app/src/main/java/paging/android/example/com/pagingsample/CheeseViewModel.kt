@@ -17,51 +17,128 @@
 package paging.android.example.com.pagingsample
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
-import androidx.paging.Config
-import androidx.paging.toLiveData
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.viewModelScope
+import androidx.paging.*
+import com.google.firebase.database.DataSnapshot
+import com.google.firebase.database.DatabaseError
+import com.google.firebase.database.ValueEventListener
+import com.google.firebase.database.ktx.database
+import com.google.firebase.database.ktx.getValue
+import com.google.firebase.ktx.Firebase
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.launch
+import kotlin.random.Random
 
 /**
  * A simple ViewModel that provides a paged list of delicious Cheeses.
  */
 class CheeseViewModel(app: Application) : AndroidViewModel(app) {
+
     val dao = CheeseDb.get(app).cheeseDao()
+
+    private var messageToSend: MutableSharedFlow<String> = MutableSharedFlow()
+
+    fun someTrigger(): SharedFlow<String> {
+        return messageToSend
+    }
 
     /**
      * We use -ktx Kotlin extension functions here, otherwise you would use LivePagedListBuilder(),
      * and PagedList.Config.Builder()
      */
-    val allCheeses = dao.allCheesesByName().toLiveData(Config(
-            /**
-             * A good page size is a value that fills at least a screen worth of content on a large
-             * device so the User is unlikely to see a null item.
-             * You can play with this constant to observe the paging behavior.
-             * <p>
-             * It's possible to vary this with list device size, but often unnecessary, unless a
-             * user scrolling on a large device is expected to scroll through items more quickly
-             * than a small device, such as when the large device uses a grid layout of items.
-             */
-            pageSize = 30,
+    val allCheeses: LiveData<PagingData<Cheese>>
+        get() {
+            val config = Config(
+                /**
+                 * A good page size is a value that fills at least a screen worth of content on a large
+                 * device so the User is unlikely to see a null item.
+                 * You can play with this constant to observe the paging behavior.
+                 * <p>
+                 * It's possible to vary this with list device size, but often unnecessary, unless a
+                 * user scrolling on a large device is expected to scroll through items more quickly
+                 * than a small device, such as when the large device uses a grid layout of items.
+                 */
+                pageSize = 10,
 
-            /**
-             * If placeholders are enabled, PagedList will report the full size but some items might
-             * be null in onBind method (PagedListAdapter triggers a rebind when data is loaded).
-             * <p>
-             * If placeholders are disabled, onBind will never receive null but as more pages are
-             * loaded, the scrollbars will jitter as new pages are loaded. You should probably
-             * disable scrollbars if you disable placeholders.
-             */
-            enablePlaceholders = true,
+                /**
+                 * If placeholders are enabled, PagedList will report the full size but some items might
+                 * be null in onBind method (PagedListAdapter triggers a rebind when data is loaded).
+                 * <p>
+                 * If placeholders are disabled, onBind will never receive null but as more pages are
+                 * loaded, the scrollbars will jitter as new pages are loaded. You should probably
+                 * disable scrollbars if you disable placeholders.
+                 */
+                enablePlaceholders = true,
 
-            /**
-             * Maximum number of items a PagedList should hold in memory at once.
-             * <p>
-             * This number triggers the PagedList to start dropping distant pages as more are loaded.
-             */
-            maxSize = 200))
+                /**
+                 * Maximum number of items a PagedList should hold in memory at once.
+                 * <p>
+                 * This number triggers the PagedList to start dropping distant pages as more are loaded.
+                 */
+                maxSize = 50
+            )
+            return Pager(
+                config = PagingConfig(
+                    config.pageSize,
+                    config.prefetchDistance,
+                    config.enablePlaceholders,
+                    config.initialLoadSizeHint,
+                    config.maxSize
+                ),
+                pagingSourceFactory = dao.allCheesesByName().asPagingSourceFactory()
+            )
+                .liveData
+        }
+
+
+    private val database = Firebase.database
+    private val ref = database.getReference("cheese")
+
+    init {
+        val data = CHEESE_DATA.mapIndexed { index, it ->
+            Cheese(id = index, name = it, processed = Random.nextBoolean(), Flavor(it))
+        }
+        ref.setValue(null)
+        ref.setValue(data)
+
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.deleteAll()
+            ref.addValueEventListener(object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    viewModelScope.launch(Dispatchers.IO) {
+                        val list = mutableListOf<Cheese>()
+                        snapshot.children.forEach { child ->
+                            val value = child.getValue<Cheese>() ?: Cheese()
+                            list.add(value)
+                            Log.i("TAG", "onDataChange: ")
+                        }
+                        if (list.isNotEmpty()) {
+                            dao.insert(list)
+                        } else {
+                            dao.deleteAll()
+                        }
+                        messageToSend.emit("sdf")
+                        messageToSend.tryEmit("I saved the data to database!!!")
+                    }
+
+                }
+
+                override fun onCancelled(error: DatabaseError) {
+                    Log.e("TAG", "onCancelled: ")
+                }
+            })
+        }
+
+
+    }
 
     fun insert(text: CharSequence) = ioThread {
-        dao.insert(Cheese(id = 0, name = text.toString()))
+        dao.insert(Cheese(id = 0, name = text.toString(), Random.nextBoolean(), Flavor(text.toString())))
     }
 
     fun remove(cheese: Cheese) = ioThread {

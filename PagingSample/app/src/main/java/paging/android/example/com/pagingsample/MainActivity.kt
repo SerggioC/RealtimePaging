@@ -16,16 +16,22 @@
 
 package paging.android.example.com.pagingsample
 
-import androidx.lifecycle.Observer
-import androidx.lifecycle.ViewModelProviders
 import android.os.Bundle
-import androidx.appcompat.app.AppCompatActivity
-import androidx.recyclerview.widget.RecyclerView
-import androidx.recyclerview.widget.ItemTouchHelper
+import android.util.Log
 import android.view.KeyEvent
-import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.widget.Toast
+import androidx.activity.viewModels
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import androidx.paging.PagingData
+import androidx.recyclerview.widget.ItemTouchHelper
+import androidx.recyclerview.widget.RecyclerView
 import kotlinx.android.synthetic.main.activity_main.*
+import kotlinx.coroutines.InternalCoroutinesApi
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChangedBy
+import kotlinx.coroutines.launch
 
 /**
  * Shows a list of Cheeses, with swipe-to-delete, and an input field at the top to add.
@@ -34,10 +40,10 @@ import kotlinx.android.synthetic.main.activity_main.*
  * is updated automatically using paging components.
  */
 class MainActivity : AppCompatActivity() {
-    private val viewModel by lazy(LazyThreadSafetyMode.NONE) {
-        ViewModelProviders.of(this).get(CheeseViewModel::class.java)
-    }
 
+    private val viewModel: CheeseViewModel by viewModels()
+
+    @InternalCoroutinesApi
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -48,7 +54,28 @@ class MainActivity : AppCompatActivity() {
 
         // Subscribe the adapter to the ViewModel, so the items in the adapter are refreshed
         // when the list changes
-        viewModel.allCheeses.observe(this, Observer(adapter::submitList))
+        viewModel.allCheeses.observe(this) { pagingData: PagingData<Cheese> ->
+            Log.w("TAG", "submiting pagingData")
+            adapter.submitData(lifecycle, pagingData)
+            lifecycleScope.launch {
+                //Your adapter's loadStateFlow here
+                adapter.loadStateFlow.
+                distinctUntilChangedBy {
+                    it.refresh
+                }.collectLatest {
+                    //you get all the data here
+                    val list = adapter.snapshot()
+                    print(list)
+                }
+            }
+        }
+
+        lifecycleScope.launchWhenCreated {
+            viewModel.someTrigger().collectLatest {
+                Toast.makeText(this@MainActivity, it, Toast.LENGTH_SHORT).show()
+            }
+        }
+
 
         initAddButtonListener()
         initSwipeToDelete()
@@ -57,12 +84,16 @@ class MainActivity : AppCompatActivity() {
     private fun initSwipeToDelete() {
         ItemTouchHelper(object : ItemTouchHelper.Callback() {
             // enable the items to swipe to the left or right
-            override fun getMovementFlags(recyclerView: RecyclerView,
-                                          viewHolder: RecyclerView.ViewHolder): Int =
-                    makeMovementFlags(0, ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT)
+            override fun getMovementFlags(
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder
+            ): Int =
+                makeMovementFlags(0, ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT)
 
-            override fun onMove(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder,
-                                target: RecyclerView.ViewHolder): Boolean = false
+            override fun onMove(
+                recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder,
+                target: RecyclerView.ViewHolder
+            ): Boolean = false
 
             // When an item is swiped, remove the item via the view model. The list item will be
             // automatically removed in response, because the adapter is observing the live list.

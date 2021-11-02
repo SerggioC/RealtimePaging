@@ -16,9 +16,9 @@
 
 package paging.android.example.com.pagingsample
 
-import androidx.paging.PagedListAdapter
-import androidx.recyclerview.widget.DiffUtil
 import android.view.ViewGroup
+import androidx.paging.PagingDataAdapter
+import androidx.recyclerview.widget.DiffUtil
 
 /**
  * A simple PagedListAdapter that binds Cheese items into CardViews.
@@ -34,13 +34,13 @@ import android.view.ViewGroup
  * @see android.arch.paging.PagedListAdapter
  * @see android.arch.paging.AsyncPagedListDiffer
  */
-class CheeseAdapter : PagedListAdapter<Cheese, CheeseViewHolder>(diffCallback) {
+class CheeseAdapter : PagingDataAdapter<Cheese, CheeseViewHolder>(diffCallback) {
     override fun onBindViewHolder(holder: CheeseViewHolder, position: Int) {
         holder.bindTo(getItem(position))
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): CheeseViewHolder =
-            CheeseViewHolder(parent)
+        CheeseViewHolder(parent)
 
     companion object {
         /**
@@ -55,14 +55,14 @@ class CheeseAdapter : PagedListAdapter<Cheese, CheeseViewHolder>(diffCallback) {
          */
         private val diffCallback = object : DiffUtil.ItemCallback<Cheese>() {
             override fun areItemsTheSame(oldItem: Cheese, newItem: Cheese): Boolean =
-                    oldItem.id == newItem.id
+                oldItem.id == newItem.id
 
             /**
              * Note that in kotlin, == checking on data classes compares all contents, but in Java,
              * typically you'll implement Object#equals, and use it to compare object contents.
              */
             override fun areContentsTheSame(oldItem: Cheese, newItem: Cheese): Boolean =
-                    oldItem == newItem
+                oldItem == newItem
         }
     }
 }

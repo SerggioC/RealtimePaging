@@ -17,10 +17,8 @@
 package paging.android.example.com.pagingsample
 
 import androidx.paging.DataSource
-import androidx.room.Dao
-import androidx.room.Delete
-import androidx.room.Insert
-import androidx.room.Query
+import androidx.room.*
+import androidx.room.OnConflictStrategy.REPLACE
 
 /**
  * Database Access Object for the Cheese database.
@@ -31,15 +29,19 @@ interface CheeseDao {
      * Room knows how to return a LivePagedListProvider, from which we can get a LiveData and serve
      * it back to UI via ViewModel.
      */
-    @Query("SELECT * FROM Cheese ORDER BY name COLLATE NOCASE ASC")
+    @Query("SELECT * FROM Cheese WHERE processed == 0 ORDER BY name COLLATE NOCASE ASC")
     fun allCheesesByName(): DataSource.Factory<Int, Cheese>
 
-    @Insert
+    @Insert(onConflict = REPLACE)
     fun insert(cheeses: List<Cheese>)
 
-    @Insert
+    @Insert(onConflict = REPLACE)
     fun insert(cheese: Cheese)
 
     @Delete
     fun delete(cheese: Cheese)
+
+    @Query("DELETE FROM Cheese")
+    fun deleteAll()
+
 }

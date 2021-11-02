@@ -16,6 +16,7 @@
 
 package paging.android.example.com.pagingsample
 
+import androidx.room.Embedded
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -23,4 +24,18 @@ import androidx.room.PrimaryKey
  * Data class that represents our items.
  */
 @Entity
-data class Cheese(@PrimaryKey(autoGenerate = true) val id: Int, val name: String)
+data class Cheese(
+    @PrimaryKey(autoGenerate = false) val id: Int,
+    val name: String,
+    val processed: Boolean,
+    @Embedded(prefix = "flavor")
+    val flavor: Flavor,
+) {
+    constructor() : this(0, "", false, Flavor(""))
+
+}
+
+
+data class Flavor(val name: String) {
+    constructor() : this("")
+}
